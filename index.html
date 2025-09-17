@@ -338,6 +338,9 @@
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
       border-left: 4px solid #667eea;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .muted {
@@ -362,6 +365,34 @@
       margin: 15px 0;
       border: 2px solid rgba(102, 126, 234, 0.2);
     }
+
+    .countdown-display {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      font-size: 8em;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+
+    .online-status {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .online { background-color: #28a745; }
+    .offline { background-color: #dc3545; }
 
     @media (max-width: 768px) {
       .card {
@@ -409,7 +440,6 @@
       display: none;
     }
 
-    /* Animaciones */
     .fade-in {
       animation: fadeIn 0.5s ease-in;
     }
@@ -433,9 +463,31 @@
       color: #dc3545 !important;
       animation: pulse 1s infinite;
     }
+
+    .connection-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: bold;
+      z-index: 1000;
+    }
+
+    .connected {
+      background: #28a745;
+      color: white;
+    }
+
+    .disconnected {
+      background: #dc3545;
+      color: white;
+    }
   </style>
 </head>
 <body>
+  <div class="connection-status" id="connectionStatus">🔴 Desconectado</div>
+
   <div class="card">
     <h2>🍎 Tuti Fruti Multiplayer + Solo</h2>
 
@@ -444,9 +496,9 @@
       <h3>📝 Instrucciones:</h3>
       <ul>
         <li>Completa cada categoría con una palabra que empiece con la letra mostrada</li>
-        <li>Presiona "🛑 STOP" cuando termines o se acabe el tiempo</li>
+        <li>El timer inicia automáticamente cuando aparece la letra</li>
         <li><strong>Puntuación:</strong> Respuesta única = 10pts, Repetida = 5pts, Vacía/Incorrecta = 0pts</li>
-        <li>¡Las palabras deben empezar con la letra indicada!</li>
+        <li>¡Las palabras deben existir y empezar con la letra indicada!</li>
         <li>¡Sé rápido y creativo!</li>
       </ul>
     </div>
@@ -461,7 +513,7 @@
         <button id="soloBtn" class="solo-btn">🎮 Jugar Solo (Prueba)</button>
       </div>
       <p class="muted" style="text-align: center; margin-top: 15px;">
-        💡 Host = primer jugador en entrar a la sala
+        💡 Host = primer jugador en entrar a la sala. Máximo 6 jugadores por sala.
       </p>
 
       <div id="lobby">
@@ -472,7 +524,7 @@
           <label for="roundTime" style="font-weight: bold;">⏱ Tiempo por ronda:</label>
           <input id="roundTime" type="number" min="10" max="300" value="60" style="width:100px;">
           <span style="color: #666;">segundos</span>
-          <button id="startRound">🎮 Iniciar ronda (host)</button>
+          <button id="startRound">🎮 Iniciar ronda (solo host)</button>
         </div>
         
         <div class="current-letter-info">
@@ -553,12 +605,18 @@
   </div>
 
   <script>
-    // ⚡ Variables globales
+    // ⚡ Variables globales mejoradas
     let isSolo = false;
     let currentTime = 60;
     let timerInterval;
     let totalScore = 0;
-    let currentGameLetter = 'A'; // Letra por defecto
+    let currentGameLetter = 'A';
+    let gameSocket = null;
+    let currentRoom = null;
+    let currentPlayer = null;
+    let isHost = false;
+    let roomPlayers = {};
+    let gameStarted = false;
     
     const categories = ["nombre", "animal", "cosa", "comida", "pais", "color", "profesion"];
     const categoryNames = {
@@ -570,6 +628,17 @@
       "color": "Color",
       "profesion": "Profesión"
     };
+
+    // Diccionario básico para validación offline
+    const wordDictionary = {
+      nombre: ['ana', 'alberto', 'antonio', 'andrea', 'alejandro', 'beatriz', 'benjamin', 'barbara', 'carlos', 'carmen', 'cristina', 'diego', 'diana', 'daniel', 'elena', 'eduardo', 'eva', 'fernando', 'francisca', 'gabriel', 'gloria', 'gonzalez', 'helena', 'hugo', 'isabel', 'ivan', 'jose', 'juan', 'julia', 'lucia', 'luis', 'maria', 'manuel', 'monica', 'nicolas', 'natalia', 'oscar', 'olga', 'patricia', 'pablo', 'raquel', 'ricardo', 'sofia', 'sergio', 'teresa', 'tomas', 'ursula', 'vicente', 'victoria', 'walter', 'ximena', 'yolanda', 'zenon'],
+      animal: ['abeja', 'ardilla', 'ballena', 'burro', 'caballo', 'conejo', 'delfin', 'elefante', 'foca', 'gato', 'hipopotamo', 'iguana', 'jirafa', 'koala', 'leon', 'mono', 'nutria', 'oso', 'perro', 'quetzal', 'raton', 'serpiente', 'tigre', 'urraca', 'vaca', 'wallaby', 'yak', 'zorro'],
+      cosa: ['avion', 'bicicleta', 'carro', 'disco', 'escalera', 'frasco', 'guitarra', 'hacha', 'iglesia', 'jarron', 'kilo', 'lapiz', 'mesa', 'nariz', 'olla', 'piano', 'queso', 'reloj', 'silla', 'telefono', 'uniforme', 'ventana', 'xilofono', 'yunque', 'zapato'],
+      comida: ['arroz', 'banana', 'carne', 'dulce', 'empanada', 'frijol', 'galleta', 'hamburguesa', 'ice', 'jugo', 'kiwi', 'leche', 'manzana', 'naranja', 'omelet', 'pan', 'queso', 'refresco', 'sopa', 'tacos', 'uva', 'vino', 'waffle', 'yogurt', 'zanahoria'],
+      pais: ['argentina', 'bolivia', 'colombia', 'dinamarca', 'españa', 'francia', 'grecia', 'hungria', 'italia', 'japon', 'kenia', 'libano', 'mexico', 'noruega', 'olanda', 'peru', 'qatar', 'rusia', 'suecia', 'turquia', 'uganda', 'venezuela', 'yemen', 'zambia'],
+      color: ['azul', 'blanco', 'cafe', 'dorado', 'esmeralda', 'fucsia', 'gris', 'hueso', 'indigo', 'jade', 'kaki', 'lila', 'magenta', 'naranja', 'ocre', 'purpura', 'quinacridona', 'rojo', 'salmon', 'turquesa', 'ultramar', 'violeta', 'whisky', 'amarillo', 'zinc'],
+      profesion: ['abogado', 'bombero', 'chef', 'doctor', 'enfermero', 'fotografo', 'guardia', 'historiador', 'ingeniero', 'jardinero', 'kinesiologo', 'locutor', 'medico', 'nutricionista', 'odontologo', 'piloto', 'quimico', 'reportero', 'soldado', 'taxista', 'urbanista', 'veterinario', 'webmaster', 'youtuber', 'zoologo']
+    };
     
     const currentLetterEl = document.getElementById("currentLetter");
     const gameLetterEl = document.getElementById("gameLetter");
@@ -577,12 +646,268 @@
     const scoreEl = document.getElementById("score");
     const resultsDiv = document.getElementById("results");
     const roundTimeInput = document.getElementById("roundTime");
+    const connectionStatus = document.getElementById("connectionStatus");
 
-    // Inicializar con letra por defecto
+    // 🌐 Sistema de Salas Simulado (LocalStorage)
+    class GameRoomManager {
+      constructor() {
+        this.rooms = this.loadRooms();
+        this.playerId = this.generatePlayerId();
+        this.updateConnectionStatus(false);
+      }
+
+      generatePlayerId() {
+        return 'player_' + Math.random().toString(36).substr(2, 9);
+      }
+
+      loadRooms() {
+        const saved = localStorage.getItem('tutifruti_rooms');
+        return saved ? JSON.parse(saved) : {};
+      }
+
+      saveRooms() {
+        localStorage.setItem('tutifruti_rooms', JSON.stringify(this.rooms));
+      }
+
+      updateConnectionStatus(connected) {
+        if (connected) {
+          connectionStatus.textContent = '🟢 Conectado';
+          connectionStatus.className = 'connection-status connected';
+        } else {
+          connectionStatus.textContent = '🔴 Desconectado';
+          connectionStatus.className = 'connection-status disconnected';
+        }
+      }
+
+      joinRoom(roomId, playerName) {
+        if (!this.rooms[roomId]) {
+          this.rooms[roomId] = {
+            id: roomId,
+            players: {},
+            host: null,
+            gameState: 'waiting',
+            currentLetter: 'A',
+            created: Date.now()
+          };
+        }
+
+        const room = this.rooms[roomId];
+        
+        // Verificar límite de jugadores
+        if (Object.keys(room.players).length >= 6) {
+          alert('⚠️ Sala llena! Máximo 6 jugadores.');
+          return false;
+        }
+
+        // Agregar jugador
+        room.players[this.playerId] = {
+          id: this.playerId,
+          name: playerName,
+          score: 0,
+          online: true,
+          joinedAt: Date.now()
+        };
+
+        // Asignar host si es el primero
+        if (!room.host) {
+          room.host = this.playerId;
+          isHost = true;
+        }
+
+        currentRoom = roomId;
+        currentPlayer = playerName;
+        roomPlayers = room.players;
+
+        this.saveRooms();
+        this.updateConnectionStatus(true);
+        this.showLobby();
+        
+        return true;
+      }
+
+      leaveRoom() {
+        if (!currentRoom || !this.rooms[currentRoom]) return;
+
+        const room = this.rooms[currentRoom];
+        delete room.players[this.playerId];
+
+        // Transferir host si era host
+        if (room.host === this.playerId) {
+          const remainingPlayers = Object.keys(room.players);
+          room.host = remainingPlayers.length > 0 ? remainingPlayers[0] : null;
+        }
+
+        // Eliminar sala si está vacía
+        if (Object.keys(room.players).length === 0) {
+          delete this.rooms[currentRoom];
+        }
+
+        this.saveRooms();
+        currentRoom = null;
+        currentPlayer = null;
+        isHost = false;
+        roomPlayers = {};
+        
+        this.updateConnectionStatus(false);
+        this.hideLobby();
+      }
+
+      startGame(letter, time) {
+        if (!isHost || !currentRoom) return false;
+
+        const room = this.rooms[currentRoom];
+        room.gameState = 'playing';
+        room.currentLetter = letter;
+        room.gameTime = time;
+        room.gameStartedAt = Date.now();
+
+        this.saveRooms();
+        
+        // Notificar a todos los jugadores
+        this.notifyGameStart(letter, time);
+        return true;
+      }
+
+      notifyGameStart(letter, time) {
+        // En una implementación real, esto sería via WebSocket
+        // Aquí simulamos actualizando el estado local
+        setTimeout(() => {
+          startGame(letter, time);
+        }, 100);
+      }
+
+      showLobby() {
+        document.getElementById("lobby").style.display = "block";
+        document.getElementById("roomLabel").textContent = currentRoom;
+        this.updatePlayersList();
+        
+        // Mostrar/ocultar botón de iniciar según si es host
+        const startBtn = document.getElementById("startRound");
+        startBtn.style.display = isHost ? "inline-block" : "none";
+        startBtn.disabled = Object.keys(roomPlayers).length < 1;
+      }
+
+      hideLobby() {
+        document.getElementById("lobby").style.display = "none";
+      }
+
+      updatePlayersList() {
+        const playersDiv = document.getElementById("players");
+        playersDiv.innerHTML = '';
+
+        Object.values(roomPlayers).forEach(player => {
+          const playerDiv = document.createElement('div');
+          playerDiv.className = 'player-item';
+          playerDiv.innerHTML = `
+            <div>
+              <span class="online-status ${player.online ? 'online' : 'offline'}"></span>
+              <strong>${player.name}</strong>
+              ${player.id === this.rooms[currentRoom]?.host ? ' 👑 (Host)' : ''}
+            </div>
+            <div>
+              🏆 ${player.score || 0} pts
+            </div>
+          `;
+          playersDiv.appendChild(playerDiv);
+        });
+      }
+
+      // Simular actualizaciones periódicas del room
+      startRoomUpdates() {
+        if (this.roomUpdateInterval) return;
+        
+        this.roomUpdateInterval = setInterval(() => {
+          if (currentRoom && this.rooms[currentRoom]) {
+            roomPlayers = this.rooms[currentRoom].players;
+            this.updatePlayersList();
+          }
+        }, 2000);
+      }
+
+      stopRoomUpdates() {
+        if (this.roomUpdateInterval) {
+          clearInterval(this.roomUpdateInterval);
+          this.roomUpdateInterval = null;
+        }
+      }
+    }
+
+    // Inicializar sistema de salas
+    const roomManager = new GameRoomManager();
+
+    // 🎯 Validación de palabras mejorada
+    async function validateWord(word, category) {
+      if (!word || word.trim().length === 0) {
+        return { valid: false, reason: 'empty' };
+      }
+
+      const cleanWord = word.trim().toLowerCase();
+      const firstLetter = cleanWord.charAt(0);
+      const expectedLetter = currentGameLetter.toLowerCase();
+
+      // Verificar que empiece con la letra correcta
+      if (firstLetter !== expectedLetter) {
+        return { valid: false, reason: 'wrong_letter' };
+      }
+
+      // Verificar en diccionario offline primero
+      if (wordDictionary[category] && wordDictionary[category].includes(cleanWord)) {
+        return { valid: true, reason: 'dictionary_match' };
+      }
+
+      // Verificar palabras obviamente inventadas o sin sentido
+      if (isNonsenseWord(cleanWord)) {
+        return { valid: false, reason: 'nonsense' };
+      }
+
+      // Si pasa las verificaciones básicas, considerar válida
+      // En una implementación real, aquí consultarías una API
+      return { valid: true, reason: 'assumed_valid' };
+    }
+
+    function isNonsenseWord(word) {
+      // Detectar palabras sin sentido (muchas consonantes seguidas, repeticiones, etc.)
+      const vowels = 'aeiou';
+      let consonantStreak = 0;
+      let hasVowel = false;
+      
+      for (let char of word) {
+        if (vowels.includes(char)) {
+          hasVowel = true;
+          consonantStreak = 0;
+        } else {
+          consonantStreak++;
+        }
+        
+        // Más de 4 consonantes seguidas es sospechoso
+        if (consonantStreak > 4) {
+          return true;
+        }
+      }
+
+      // Muy corta sin vocales
+      if (!hasVowel && word.length > 2) {
+        return true;
+      }
+
+      // Patrones repetitivos
+      if (/(.)\1{3,}/.test(word)) {
+        return true;
+      }
+
+      // Palabras solo con números o caracteres especiales
+      if (!/[a-záéíóúñü]/.test(word)) {
+        return true;
+      }
+
+      return false;
+    }
+
+    // 🎮 Inicialización mejorada
     window.onload = function() {
       setDefaultLetter();
       setupInputValidation();
-      showGameByDefault(); // Mostrar juego por defecto
+      showGameByDefault();
     };
 
     function setDefaultLetter() {
@@ -594,19 +919,14 @@
     }
 
     function showGameByDefault() {
-      // Mostrar el juego directamente con letra por defecto
       document.getElementById("game").style.display = "block";
       document.getElementById("game").classList.add("fade-in");
       isSolo = true;
       
-      // Configurar tiempo inicial
       currentTime = parseInt(roundTimeInput.value) || 60;
       timerEl.textContent = currentTime;
-      
-      // No iniciar timer automáticamente, esperar a que el usuario haga algo
       scoreEl.textContent = totalScore;
       
-      // Enfocar primer input
       setTimeout(() => {
         document.getElementById('nombre').focus();
       }, 500);
@@ -639,24 +959,36 @@
       });
     }
 
+    // 🔍 Validación de inputs mejorada
     function setupInputValidation() {
       categories.forEach(category => {
         const input = document.getElementById(category);
         if (!input) return;
         
-        input.addEventListener('input', function() {
-          validateInput(this, category);
+        input.addEventListener('input', async function() {
+          await validateInput(this, category);
         });
         
         input.addEventListener('keypress', function(e) {
-          if (e.key === 'Enter' && isSolo) {
-            finishRound();
+          if (e.key === 'Enter') {
+            if (isSolo) {
+              finishRound();
+            }
           }
+        });
+
+        // Validación en tiempo real con delay
+        let validationTimeout;
+        input.addEventListener('input', function() {
+          clearTimeout(validationTimeout);
+          validationTimeout = setTimeout(async () => {
+            await validateInput(this, category);
+          }, 500);
         });
       });
     }
 
-    function validateInput(input, category) {
+    async function validateInput(input, category) {
       const value = input.value.trim();
       const errorMsg = input.parentElement.querySelector('.error-message');
       
@@ -669,24 +1001,65 @@
         return;
       }
       
-      const firstLetter = value.charAt(0).toUpperCase();
-      const expectedLetter = currentGameLetter.toUpperCase();
+      // Validar palabra
+      const validation = await validateWord(value, category);
       
-      if (firstLetter === expectedLetter) {
+      if (validation.valid) {
         input.classList.add('input-correct');
         if (errorMsg) errorMsg.style.display = 'none';
       } else {
         input.classList.add('input-error');
         if (errorMsg) {
-          errorMsg.textContent = `¡Error! Debe empezar con "${expectedLetter}"`;
+          let errorText = '';
+          switch (validation.reason) {
+            case 'wrong_letter':
+              errorText = `¡Error! Debe empezar con "${currentGameLetter}"`;
+              break;
+            case 'nonsense':
+              errorText = '¡Esa palabra no existe!';
+              break;
+            case 'empty':
+              errorText = 'Campo vacío';
+              break;
+            default:
+              errorText = 'Palabra inválida';
+          }
+          
+          errorMsg.textContent = errorText;
           errorMsg.style.display = 'block';
           
-          // Ocultar mensaje después de 4 segundos
           setTimeout(() => {
             if (errorMsg) errorMsg.style.display = 'none';
           }, 4000);
         }
       }
+    }
+
+    // ⏰ Sistema de countdown y timer automático
+    function showCountdown(callback) {
+      const countdownDiv = document.createElement('div');
+      countdownDiv.className = 'countdown-display';
+      document.body.appendChild(countdownDiv);
+      
+      let count = 3;
+      
+      const countInterval = setInterval(() => {
+        if (count > 0) {
+          countdownDiv.textContent = count;
+          countdownDiv.style.animation = 'pulse 1s ease-in-out';
+        } else {
+          countdownDiv.textContent = '¡GO!';
+          countdownDiv.style.color = '#28a745';
+          
+          setTimeout(() => {
+            document.body.removeChild(countdownDiv);
+            callback();
+          }, 1000);
+          
+          clearInterval(countInterval);
+        }
+        count--;
+      }, 1000);
     }
 
     function startGame(letter, time) {
@@ -697,24 +1070,39 @@
       currentGameLetter = letter;
       currentLetterEl.textContent = letter;
       gameLetterEl.textContent = letter;
-      timerEl.textContent = time;
       currentTime = time;
+      timerEl.textContent = time;
       
       updatePlaceholders();
       clearInputs();
-      
-      // No iniciar timer automáticamente
-      clearInterval(timerInterval);
-      timerInterval = null;
-      
       resultsDiv.innerHTML = "";
+      gameStarted = true;
       
-      // Cambiar texto del botón STOP
-      document.getElementById("stopBtn").textContent = "🎮 ¡EMPEZAR!";
-      document.getElementById("stopBtn").disabled = false;
+      // Mostrar countdown y luego iniciar timer automáticamente
+      showCountdown(() => {
+        startTimer();
+        document.getElementById('nombre').focus();
+      });
+    }
+
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
       
-      // Enfocar primer input
-      document.getElementById('nombre').focus();
+      timerInterval = setInterval(() => {
+        currentTime--;
+        timerEl.textContent = currentTime;
+        
+        if (currentTime <= 10) {
+          timerEl.parentElement.classList.add('timer-warning');
+        } else {
+          timerEl.parentElement.classList.remove('timer-warning');
+        }
+        
+        if (currentTime <= 0) {
+          clearInterval(timerInterval);
+          finishRound();
+        }
+      }, 1000);
     }
 
     function clearInputs() {
@@ -731,7 +1119,46 @@
       });
     }
 
-    // 🎮 Botón Jugar Solo
+    // 🎯 Eventos de botones
+    document.getElementById("join").onclick = () => {
+      const name = document.getElementById("name").value.trim();
+      const room = document.getElementById("room").value.trim();
+      
+      if (!name || !room) {
+        alert('⚠️ Por favor ingresa tu nombre y el ID de la sala');
+        return;
+      }
+      
+      if (name.length > 20) {
+        alert('⚠️ El nombre debe tener máximo 20 caracteres');
+        return;
+      }
+      
+      if (roomManager.joinRoom(room, name)) {
+        document.getElementById("join").style.display = "none";
+        document.getElementById("leave").style.display = "inline-block";
+        document.getElementById("name").disabled = true;
+        document.getElementById("room").disabled = true;
+        
+        roomManager.startRoomUpdates();
+        alert(`✅ Te uniste a la sala "${room}" como "${name}"`);
+      }
+    };
+
+    document.getElementById("leave").onclick = () => {
+      if (confirm('¿Estás seguro de que quieres salir de la sala?')) {
+        roomManager.leaveRoom();
+        roomManager.stopRoomUpdates();
+        
+        document.getElementById("join").style.display = "inline-block";
+        document.getElementById("leave").style.display = "none";
+        document.getElementById("name").disabled = false;
+        document.getElementById("room").disabled = false;
+        
+        alert('❌ Saliste de la sala');
+      }
+    };
+
     document.getElementById("soloBtn").onclick = () => {
       isSolo = true;
       const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
@@ -740,42 +1167,59 @@
       startGame(letra, currentTime);
     };
 
-    // 🛑 STOP - Iniciar timer si no está corriendo
+    document.getElementById("startRound").onclick = () => {
+      if (!isHost) {
+        alert('⚠️ Solo el host puede iniciar la ronda');
+        return;
+      }
+      
+      if (Object.keys(roomPlayers).length < 1) {
+        alert('⚠️ Necesitas al menos 1 jugador para iniciar');
+        return;
+      }
+      
+      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+      const letra = letters[Math.floor(Math.random() * letters.length)];
+      const tiempo = parseInt(roundTimeInput.value) || 60;
+      
+      if (roomManager.startGame(letra, tiempo)) {
+        isSolo = false;
+      }
+    };
+
     document.getElementById("stopBtn").onclick = () => {
-      // Si es la primera vez que presiona STOP, iniciar el timer
-      if (!timerInterval && currentTime > 0) {
-        startTimer();
-      } else {
+      if (gameStarted && timerInterval) {
         finishRound();
       }
     };
 
-    function startTimer() {
-      if (timerInterval) return; // Ya está corriendo
-      
-      timerInterval = setInterval(() => {
-        currentTime--;
-        timerEl.textContent = currentTime;
-        
-        // Cambiar color cuando queden 10 segundos
-        if (currentTime <= 10) {
-          timerEl.parentElement.classList.add('timer-warning');
-        } else {
-          timerEl.parentElement.classList.remove('timer-warning');
-        }
-        
-        if (currentTime <= 0) {
-          clearInterval(timerInterval);
-          finishRound();
-        }
-      }, 1000);
-      
-      // Cambiar texto del botón
-      document.getElementById("stopBtn").textContent = "🛑 STOP";
-    }
+    document.getElementById("newRound").onclick = () => {
+      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+      const letra = letters[Math.floor(Math.random() * letters.length)];
+      currentTime = parseInt(roundTimeInput.value) || 60;
+      startGame(letra, currentTime);
+    };
 
-    function finishRound() {
+    document.getElementById("resetGame").onclick = () => {
+      if (confirm('¿Quieres reiniciar el juego completamente?')) {
+        totalScore = 0;
+        scoreEl.textContent = '0';
+        resultsDiv.innerHTML = '';
+        clearInputs();
+        setDefaultLetter();
+        gameStarted = false;
+        
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+    };
+
+    // 🏆 Sistema de puntuación mejorado
+    async function finishRound() {
       clearInterval(timerInterval);
+      gameStarted = false;
       
       // Deshabilitar inputs
       categories.forEach(cat => {
@@ -786,19 +1230,19 @@
       let roundScore = 0;
       const results = [];
       
-      categories.forEach(cat => {
+      // Validar todas las respuestas
+      for (const cat of categories) {
         const input = document.getElementById(cat);
         const answer = input.value.trim();
-        const firstLetter = answer.charAt(0).toUpperCase();
-        const expectedLetter = currentGameLetter.toUpperCase();
         
+        const validation = await validateWord(answer, cat);
         let points = 0;
         let status = 'empty';
         
-        if (answer === '') {
+        if (!answer) {
           points = 0;
           status = 'empty';
-        } else if (firstLetter !== expectedLetter) {
+        } else if (!validation.valid) {
           points = 0;
           status = 'error';
         } else {
@@ -811,9 +1255,10 @@
           category: cat,
           answer: answer,
           points: points,
-          status: status
+          status: status,
+          validation: validation
         });
-      });
+      }
       
       totalScore += roundScore;
       scoreEl.textContent = totalScore;
@@ -852,7 +1297,13 @@
           case 'error':
             statusEmoji = '❌';
             statusClass = 'points-error';
-            statusText = `No empieza con "${currentGameLetter}"`;
+            if (result.validation.reason === 'wrong_letter') {
+              statusText = `No empieza con "${currentGameLetter}"`;
+            } else if (result.validation.reason === 'nonsense') {
+              statusText = 'Palabra inexistente';
+            } else {
+              statusText = 'Palabra inválida';
+            }
             break;
           case 'empty':
             statusEmoji = '⚪';
@@ -873,37 +1324,19 @@
       });
     }
 
-    // 🎮 Nueva Ronda
-    document.getElementById("newRound").onclick = () => {
-      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
-      const letra = letters[Math.floor(Math.random() * letters.length)];
-      currentTime = parseInt(roundTimeInput.value) || 60;
-      startGame(letra, currentTime);
-    };
-
-    // 🔄 Reiniciar Juego
-    document.getElementById("resetGame").onclick = () => {
-      totalScore = 0;
-      scoreEl.textContent = '0';
-      resultsDiv.innerHTML = '';
-      clearInputs();
-      setDefaultLetter();
-      
-      if (confirm('¿Quieres reiniciar el juego completamente?')) {
-        location.reload();
-      }
-    };
-
     // Prevenir envío de formulario con Enter
     document.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
+      }
+    });
+
+    // Limpiar salas viejas al cargar
+    window.addEventListener('beforeunload', () => {
+      if (currentRoom) {
+        roomManager.leaveRoom();
       }
     });
   </script>
 </body>
 </html>
-
-
-
-
