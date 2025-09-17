@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🍎 Tuti Fruti Multiplayer + Modo Solo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(10px);
+    }
+
+    h2 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 25px;
+      font-size: 2.2em;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .instructions {
+      background: linear-gradient(45deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 25px;
+      border-left: 4px solid #667eea;
+    }
+
+    .instructions h3 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 1.2em;
+    }
+
+    .instructions ul {
+      padding-left: 20px;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+    }
+
+    .lobby-section {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      margin-bottom: 25px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    }
+
+    input, button, select {
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 2px solid #ddd;
+      margin: 8px 6px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+      transform: translateY(-1px);
+    }
+
+    button {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .solo-btn {
+      background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+      box-shadow: 0 6px 15px rgba(255, 107, 107, 0.3);
+    }
+
+    .stop-btn {
+      background: linear-gradient(45deg, #ff6b6b, #dc3545);
+      font-size: 18px;
+      padding: 15px 25px;
+      box-shadow: 0 6px 15px rgba(255, 107, 107, 0.4);
+    }
+
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .letter-display {
+      font-size: 4em;
+      font-weight: bold;
+      color: #667eea;
+      background: linear-gradient(45deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      padding: 25px;
+      border-radius: 20px;
+      text-align: center;
+      min-width: 100px;
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .timer-display {
+      font-size: 1.8em;
+      color: #333;
+      font-weight: bold;
+      background: rgba(255, 193, 7, 0.1);
+      padding: 15px 20px;
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+    }
+
+    .score-display {
+      font-size: 1.4em;
+      color: #333;
+      background: rgba(40, 167, 69, 0.1);
+      padding: 15px 20px;
+      border-radius: 15px;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
+    }
+
+    .game-board {
+      overflow-x: auto;
+      margin: 25px 0;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 15px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 15px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    td input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    td input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
+      transform: scale(1.02);
+    }
+
+    .input-correct {
+      border-color: #28a745 !important;
+      background: linear-gradient(45deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .input-error {
+      border-color: #dc3545 !important;
+      background: linear-gradient(45deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
+      color: #dc3545;
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .input-empty {
+      border-color: #ffc107 !important;
+      background: rgba(255, 193, 7, 0.1);
+    }
+
+    .error-message {
+      position: absolute;
+      background: #dc3545;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: bold;
+      top: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      z-index: 1000;
+      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+    }
+
+    .error-message::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #dc3545;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 25px 0;
+      flex-wrap: wrap;
+    }
+
+    #results {
+      margin-top: 25px;
+      padding: 25px;
+      background: linear-gradient(45deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      border-radius: 15px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .results-header {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+    }
+
+    .score-breakdown {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .category-result {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #667eea;
+    }
+
+    .category-name {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-size: 14px;
+      letter-spacing: 1px;
+    }
+
+    .category-answer {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #555;
+      font-style: italic;
+    }
+
+    .category-points {
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .points-correct { color: #28a745; }
+    .points-error { color: #dc3545; }
+    .points-empty { color: #ffc107; }
+
+    .lobby-players {
+      background: rgba(102, 126, 234, 0.05);
+      padding: 20px;
+      border-radius: 15px;
+      margin: 20px 0;
+    }
+
+    .player-item {
+      background: white;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid #667eea;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 14px;
+      font-style: italic;
+    }
+
+    .time-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 15px 0;
+      flex-wrap: wrap;
+    }
+
+    .current-letter-info {
+      background: rgba(102, 126, 234, 0.1);
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 15px 0;
+      border: 2px solid rgba(102, 126, 234, 0.2);
+    }
+
+    @media (max-width: 768px) {
+      .card {
+        padding: 15px;
+      }
+      
+      h2 {
+        font-size: 1.8em;
+      }
+      
+      .letter-display {
+        font-size: 2.5em;
+        padding: 15px;
+      }
+      
+      .game-header {
+        justify-content: center;
+        text-align: center;
+      }
+      
+      th, td {
+        padding: 8px;
+        font-size: 14px;
+      }
+      
+      td input {
+        padding: 8px;
+        font-size: 14px;
+      }
+      
+      .controls {
+        flex-direction: column;
+      }
+      
+      button {
+        width: 100%;
+      }
+    }
+
+    #game {
+      display: none;
+    }
+
+    #lobby {
+      display: none;
+    }
+
+    /* Animaciones */
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .timer-warning {
+      color: #dc3545 !important;
+      animation: pulse 1s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🍎 Tuti Fruti Multiplayer + Solo</h2>
+
+    <!-- Instrucciones -->
+    <div class="instructions">
+      <h3>📝 Instrucciones:</h3>
+      <ul>
+        <li>Completa cada categoría con una palabra que empiece con la letra mostrada</li>
+        <li>Presiona "🛑 STOP" cuando termines o se acabe el tiempo</li>
+        <li><strong>Puntuación:</strong> Respuesta única = 10pts, Repetida = 5pts, Vacía/Incorrecta = 0pts</li>
+        <li>¡Las palabras deben empezar con la letra indicada!</li>
+        <li>¡Sé rápido y creativo!</li>
+      </ul>
+    </div>
+
+    <!-- Lobby -->
+    <div class="lobby-section">
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center;">
+        <input id="name" placeholder="Tu nombre (ej: Juan)" style="min-width: 200px;">
+        <input id="room" placeholder="ID de sala (ej: sala1)" style="min-width: 200px;">
+        <button id="join">🚪 Entrar / Crear sala</button>
+        <button id="leave" style="display:none">🚪 Salir</button>
+        <button id="soloBtn" class="solo-btn">🎮 Jugar Solo (Prueba)</button>
+      </div>
+      <p class="muted" style="text-align: center; margin-top: 15px;">
+        💡 Host = primer jugador en entrar a la sala
+      </p>
+
+      <div id="lobby">
+        <h3>👥 Jugadores en sala <span id="roomLabel"></span>:</h3>
+        <div id="players" class="lobby-players"></div>
+        
+        <div class="time-controls">
+          <label for="roundTime" style="font-weight: bold;">⏱ Tiempo por ronda:</label>
+          <input id="roundTime" type="number" min="10" max="300" value="60" style="width:100px;">
+          <span style="color: #666;">segundos</span>
+          <button id="startRound">🎮 Iniciar ronda (host)</button>
+        </div>
+        
+        <div class="current-letter-info">
+          <span style="font-weight: bold;">🎯 Letra actual: </span>
+          <span id="currentLetter" style="font-size: 1.5em; font-weight: bold; color: #667eea;">A</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Juego -->
+    <div id="game" class="fade-in">
+      <div class="game-header">
+        <div class="letter-display pulse" id="gameLetter">A</div>
+        <div class="timer-display">
+          ⏱ Tiempo: <span id="timer">60</span>s
+        </div>
+        <div class="score-display">
+          🏆 Puntuación: <span id="score">0</span> pts
+        </div>
+      </div>
+
+      <div class="game-board">
+        <table>
+          <thead>
+            <tr>
+              <th>👤 Nombre</th>
+              <th>🐾 Animal</th>
+              <th>📦 Cosa</th>
+              <th>🍽️ Comida</th>
+              <th>🌍 País/Ciudad</th>
+              <th>🎨 Color</th>
+              <th>💼 Profesión</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="position: relative;">
+                <input id="nombre" placeholder="Ana, Alberto...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="animal" placeholder="Abeja, Ardilla...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="cosa" placeholder="Avión, Agenda...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="comida" placeholder="Arroz, Aguacate...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="pais" placeholder="Argentina, Australia...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="color" placeholder="Azul, Amarillo...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+              <td style="position: relative;">
+                <input id="profesion" placeholder="Abogado, Arquitecto...">
+                <div class="error-message" style="display: none;"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="controls">
+        <button id="stopBtn" class="stop-btn">🛑 STOP</button>
+        <button id="newRound">🎮 Nueva Ronda</button>
+        <button id="resetGame">🔄 Reiniciar Juego</button>
+      </div>
+
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    // ⚡ Variables globales
+    let isSolo = false;
+    let currentTime = 60;
+    let timerInterval;
+    let totalScore = 0;
+    let currentGameLetter = 'A'; // Letra por defecto
+    
+    const categories = ["nombre", "animal", "cosa", "comida", "pais", "color", "profesion"];
+    const categoryNames = {
+      "nombre": "Nombre",
+      "animal": "Animal", 
+      "cosa": "Cosa",
+      "comida": "Comida",
+      "pais": "País/Ciudad",
+      "color": "Color",
+      "profesion": "Profesión"
+    };
+    
+    const currentLetterEl = document.getElementById("currentLetter");
+    const gameLetterEl = document.getElementById("gameLetter");
+    const timerEl = document.getElementById("timer");
+    const scoreEl = document.getElementById("score");
+    const resultsDiv = document.getElementById("results");
+    const roundTimeInput = document.getElementById("roundTime");
+
+    // Inicializar con letra por defecto
+    window.onload = function() {
+      setDefaultLetter();
+      setupInputValidation();
+      showGameByDefault(); // Mostrar juego por defecto
+    };
+
+    function setDefaultLetter() {
+      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+      currentGameLetter = letters[Math.floor(Math.random() * letters.length)];
+      currentLetterEl.textContent = currentGameLetter;
+      gameLetterEl.textContent = currentGameLetter;
+      updatePlaceholders();
+    }
+
+    function showGameByDefault() {
+      // Mostrar el juego directamente con letra por defecto
+      document.getElementById("game").style.display = "block";
+      document.getElementById("game").classList.add("fade-in");
+      isSolo = true;
+      
+      // Configurar tiempo inicial
+      currentTime = parseInt(roundTimeInput.value) || 60;
+      timerEl.textContent = currentTime;
+      
+      // No iniciar timer automáticamente, esperar a que el usuario haga algo
+      scoreEl.textContent = totalScore;
+      
+      // Enfocar primer input
+      setTimeout(() => {
+        document.getElementById('nombre').focus();
+      }, 500);
+    }
+
+    function updatePlaceholders() {
+      const examples = {
+        'A': { nombre: 'Ana, Alberto...', animal: 'Abeja, Ardilla...', cosa: 'Avión, Agenda...', comida: 'Arroz, Aguacate...', pais: 'Argentina, Australia...', color: 'Azul, Amarillo...', profesion: 'Abogado, Arquitecto...' },
+        'B': { nombre: 'Bruno, Beatriz...', animal: 'Búho, Ballena...', cosa: 'Bicicleta, Botella...', comida: 'Banana, Bistec...', pais: 'Brasil, Bélgica...', color: 'Blanco, Beige...', profesion: 'Bombero, Bailarín...' },
+        'C': { nombre: 'Carlos, Carmen...', animal: 'Caballo, Conejo...', cosa: 'Carro, Computadora...', comida: 'Carne, Chocolate...', pais: 'Colombia, Chile...', color: 'Celeste, Café...', profesion: 'Chef, Contador...' }
+      };
+      
+      const defaultExamples = {
+        nombre: `${currentGameLetter}na, ${currentGameLetter}lberto...`,
+        animal: `${currentGameLetter}beja, ${currentGameLetter}rdilla...`,
+        cosa: `${currentGameLetter}vión, ${currentGameLetter}genda...`,
+        comida: `${currentGameLetter}rroz, ${currentGameLetter}guacate...`,
+        pais: `${currentGameLetter}rgentina, ${currentGameLetter}ustralia...`,
+        color: `${currentGameLetter}zul, ${currentGameLetter}marillo...`,
+        profesion: `${currentGameLetter}bogado, ${currentGameLetter}rquitecto...`
+      };
+      
+      const placeholders = examples[currentGameLetter] || defaultExamples;
+      
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        if (input) {
+          input.placeholder = placeholders[cat] || `${categoryNames[cat]} con ${currentGameLetter}...`;
+        }
+      });
+    }
+
+    function setupInputValidation() {
+      categories.forEach(category => {
+        const input = document.getElementById(category);
+        if (!input) return;
+        
+        input.addEventListener('input', function() {
+          validateInput(this, category);
+        });
+        
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter' && isSolo) {
+            finishRound();
+          }
+        });
+      });
+    }
+
+    function validateInput(input, category) {
+      const value = input.value.trim();
+      const errorMsg = input.parentElement.querySelector('.error-message');
+      
+      // Limpiar clases previas
+      input.classList.remove('input-correct', 'input-error', 'input-empty');
+      if (errorMsg) errorMsg.style.display = 'none';
+      
+      if (value === '') {
+        input.classList.add('input-empty');
+        return;
+      }
+      
+      const firstLetter = value.charAt(0).toUpperCase();
+      const expectedLetter = currentGameLetter.toUpperCase();
+      
+      if (firstLetter === expectedLetter) {
+        input.classList.add('input-correct');
+        if (errorMsg) errorMsg.style.display = 'none';
+      } else {
+        input.classList.add('input-error');
+        if (errorMsg) {
+          errorMsg.textContent = `¡Error! Debe empezar con "${expectedLetter}"`;
+          errorMsg.style.display = 'block';
+          
+          // Ocultar mensaje después de 4 segundos
+          setTimeout(() => {
+            if (errorMsg) errorMsg.style.display = 'none';
+          }, 4000);
+        }
+      }
+    }
+
+    function startGame(letter, time) {
+      document.getElementById("lobby").style.display = "none";
+      document.getElementById("game").style.display = "block";
+      document.getElementById("game").classList.add("fade-in");
+      
+      currentGameLetter = letter;
+      currentLetterEl.textContent = letter;
+      gameLetterEl.textContent = letter;
+      timerEl.textContent = time;
+      currentTime = time;
+      
+      updatePlaceholders();
+      clearInputs();
+      
+      // No iniciar timer automáticamente
+      clearInterval(timerInterval);
+      timerInterval = null;
+      
+      resultsDiv.innerHTML = "";
+      
+      // Cambiar texto del botón STOP
+      document.getElementById("stopBtn").textContent = "🎮 ¡EMPEZAR!";
+      document.getElementById("stopBtn").disabled = false;
+      
+      // Enfocar primer input
+      document.getElementById('nombre').focus();
+    }
+
+    function clearInputs() {
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        if (input) {
+          input.value = '';
+          input.classList.remove('input-correct', 'input-error', 'input-empty');
+          input.disabled = false;
+          
+          const errorMsg = input.parentElement.querySelector('.error-message');
+          if (errorMsg) errorMsg.style.display = 'none';
+        }
+      });
+    }
+
+    // 🎮 Botón Jugar Solo
+    document.getElementById("soloBtn").onclick = () => {
+      isSolo = true;
+      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+      const letra = letters[Math.floor(Math.random() * letters.length)];
+      currentTime = parseInt(roundTimeInput.value) || 60;
+      startGame(letra, currentTime);
+    };
+
+    // 🛑 STOP - Iniciar timer si no está corriendo
+    document.getElementById("stopBtn").onclick = () => {
+      // Si es la primera vez que presiona STOP, iniciar el timer
+      if (!timerInterval && currentTime > 0) {
+        startTimer();
+      } else {
+        finishRound();
+      }
+    };
+
+    function startTimer() {
+      if (timerInterval) return; // Ya está corriendo
+      
+      timerInterval = setInterval(() => {
+        currentTime--;
+        timerEl.textContent = currentTime;
+        
+        // Cambiar color cuando queden 10 segundos
+        if (currentTime <= 10) {
+          timerEl.parentElement.classList.add('timer-warning');
+        } else {
+          timerEl.parentElement.classList.remove('timer-warning');
+        }
+        
+        if (currentTime <= 0) {
+          clearInterval(timerInterval);
+          finishRound();
+        }
+      }, 1000);
+      
+      // Cambiar texto del botón
+      document.getElementById("stopBtn").textContent = "🛑 STOP";
+    }
+
+    function finishRound() {
+      clearInterval(timerInterval);
+      
+      // Deshabilitar inputs
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        if (input) input.disabled = true;
+      });
+      
+      let roundScore = 0;
+      const results = [];
+      
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        const answer = input.value.trim();
+        const firstLetter = answer.charAt(0).toUpperCase();
+        const expectedLetter = currentGameLetter.toUpperCase();
+        
+        let points = 0;
+        let status = 'empty';
+        
+        if (answer === '') {
+          points = 0;
+          status = 'empty';
+        } else if (firstLetter !== expectedLetter) {
+          points = 0;
+          status = 'error';
+        } else {
+          points = 10; // En modo solo, siempre es única
+          status = 'correct';
+        }
+        
+        roundScore += points;
+        results.push({
+          category: cat,
+          answer: answer,
+          points: points,
+          status: status
+        });
+      });
+      
+      totalScore += roundScore;
+      scoreEl.textContent = totalScore;
+      
+      displayResults(results, roundScore);
+    }
+
+    function displayResults(results, roundScore) {
+      resultsDiv.innerHTML = `
+        <div class="results-header">
+          📊 Resultados de la Ronda
+          <div style="font-size: 1.8em; margin: 10px 0; color: #667eea;">
+            +${roundScore} puntos
+          </div>
+        </div>
+        <div class="score-breakdown" id="scoreBreakdown">
+        </div>
+      `;
+      
+      const breakdown = document.getElementById('scoreBreakdown');
+      
+      results.forEach(result => {
+        const div = document.createElement('div');
+        div.className = 'category-result';
+        
+        let statusEmoji = '';
+        let statusClass = '';
+        let statusText = '';
+        
+        switch(result.status) {
+          case 'correct':
+            statusEmoji = '✅';
+            statusClass = 'points-correct';
+            statusText = 'Correcto';
+            break;
+          case 'error':
+            statusEmoji = '❌';
+            statusClass = 'points-error';
+            statusText = `No empieza con "${currentGameLetter}"`;
+            break;
+          case 'empty':
+            statusEmoji = '⚪';
+            statusClass = 'points-empty';
+            statusText = 'Sin respuesta';
+            break;
+        }
+        
+        div.innerHTML = `
+          <div class="category-name">${categoryNames[result.category]}</div>
+          <div class="category-answer">"${result.answer || 'Sin respuesta'}"</div>
+          <div class="category-points ${statusClass}">
+            ${statusEmoji} ${statusText} - ${result.points} pts
+          </div>
+        `;
+        
+        breakdown.appendChild(div);
+      });
+    }
+
+    // 🎮 Nueva Ronda
+    document.getElementById("newRound").onclick = () => {
+      const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+      const letra = letters[Math.floor(Math.random() * letters.length)];
+      currentTime = parseInt(roundTimeInput.value) || 60;
+      startGame(letra, currentTime);
+    };
+
+    // 🔄 Reiniciar Juego
+    document.getElementById("resetGame").onclick = () => {
+      totalScore = 0;
+      scoreEl.textContent = '0';
+      resultsDiv.innerHTML = '';
+      clearInputs();
+      setDefaultLetter();
+      
+      if (confirm('¿Quieres reiniciar el juego completamente?')) {
+        location.reload();
+      }
+    };
+
+    // Prevenir envío de formulario con Enter
+    document.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>
+
+
+
+
