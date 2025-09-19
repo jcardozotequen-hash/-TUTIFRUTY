@@ -840,6 +840,17 @@
       });
       
       listeners.set('stop', stopListener);
+      
+      // Escuchar cambios en los resultados para mostrarlos automáticamente
+      const resultsRef = ref(database, `gameStates/${roomId}/roundResults`);
+      const resultsListener = onValue(resultsRef, (snapshot) => {
+        if (snapshot.exists() && !gameStarted) {
+          // Solo mostrar resultados si el juego no está activo
+          displayMultiplayerResults();
+        }
+      });
+      
+      listeners.set('results', resultsListener);
     }
 
     function clearListeners() {
@@ -954,6 +965,14 @@
       if (!currentRoom || !playerId) return;
       
       try {
+        // Enviar respuestas antes de marcar STOP
+        const answers = {};
+        categories.forEach(cat => {
+          const input = document.getElementById(cat);
+          answers[cat] = input.value.trim();
+        });
+        await submitAnswers(answers);
+        
         // Marcar que este jugador dijo STOP
         await set(ref(database, `gameStates/${currentRoom}/playerStopped`), {
           playerId: playerId,
@@ -961,9 +980,11 @@
           stoppedAt: serverTimestamp()
         });
         
-        // Si soy host, terminar la ronda inmediatamente
+        // Si soy host, terminar la ronda después de un breve delay
         if (isHost) {
-          await finishMultiplayerRound();
+          setTimeout(async () => {
+            await finishMultiplayerRound();
+          }, 1000);
         }
         
       } catch (error) {
@@ -975,18 +996,22 @@
       if (!isHost || !currentRoom) return;
       
       try {
+        // Cambiar estado a finished PRIMERO para que todos los jugadores se detengan
         await set(ref(database, `rooms/${currentRoom}/status`), 'finished');
         
-        const gameStateRef = ref(database, `gameStates/${currentRoom}/roundAnswers`);
-        const answersSnapshot = await get(gameStateRef);
-        
-        if (answersSnapshot.exists()) {
-          const allAnswers = answersSnapshot.val();
-          const results = await processAnswers(allAnswers);
+        // Esperar un poco para que todos los jugadores envíen sus respuestas
+        setTimeout(async () => {
+          const gameStateRef = ref(database, `gameStates/${currentRoom}/roundAnswers`);
+          const answersSnapshot = await get(gameStateRef);
           
-          await set(ref(database, `gameStates/${currentRoom}/roundResults`), results);
-          await updateTotalScores(results);
-        }
+          if (answersSnapshot.exists()) {
+            const allAnswers = answersSnapshot.val();
+            const results = await processAnswers(allAnswers);
+            
+            await set(ref(database, `gameStates/${currentRoom}/roundResults`), results);
+            await updateTotalScores(results);
+          }
+        }, 2000); // Dar tiempo a que lleguen todas las respuestas
         
       } catch (error) {
         console.error('Error al finalizar ronda:', error);
@@ -1114,6 +1139,30 @@
       }, 1000);
     }
 
+    // Manejar cuando alguien dice STOP
+    function handleSomeoneStoppedGame(stopData) {
+      // Detener el timer y deshabilitar inputs inmediatamente
+      clearInterval(timerInterval);
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        if (input) input.disabled = true;
+      });
+      
+      if (stopData.playerId !== playerId) {
+        // Otro jugador dijo STOP, mostrar mensaje
+        alert(`🛑 ${stopData.playerName} dijo STOP! Se detiene la ronda para todos.`);
+      }
+      
+      // Enviar respuestas si aún no se han enviado
+      const answers = {};
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        answers[cat] = input.value.trim();
+      });
+      
+      submitAnswers(answers);
+    }
+
     async function handleTimeUp() {
       const answers = {};
       categories.forEach(cat => {
@@ -1132,7 +1181,17 @@
     function handleGameEnd() {
       clearInterval(timerInterval);
       gameStarted = false;
-      displayMultiplayerResults();
+      
+      // Deshabilitar todos los inputs cuando el juego termina
+      categories.forEach(cat => {
+        const input = document.getElementById(cat);
+        if (input) input.disabled = true;
+      });
+      
+      // Esperar un momento y luego mostrar resultados
+      setTimeout(() => {
+        displayMultiplayerResults();
+      }, 1500);
     }
 
     function updatePlayersList(players) {
@@ -1183,17 +1242,84 @@
         if (resultsSnapshot.exists()) {
           const results = resultsSnapshot.val();
           
+          // Obtener puntuaciones totales actualizadas
+          const playersRef = ref(database, `rooms/${currentRoom}/players`);
+          const playersSnapshot = await get(playersRef);
+          const playersData = playersSnapshot.val() || {};
+          
+          // Crear ranking por puntuación total
+          const ranking = Object.values(playersData)
+            .map(player => ({
+              name: player.name,
+              totalScore: player.score || 0,
+              id: player.id
+            }))
+            .sort((a, b) => b.totalScore - a.totalScore);
+          
           let html = `
             <div class="results-header">
               🏆 Resultados de la Ronda
             </div>
-            <div class="multiplayer-results">
           `;
+          
+          // Mostrar ranking general
+          if (ranking.length > 0) {
+            html += `
+              <div style="background: white; padding: 20px; border-radius: 15px; margin: 20px 0; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);">
+                <h3 style="text-align: center; color: #333; margin-bottom: 20px;">🥇 RANKING GENERAL 🥇</h3>
+                <div style="display: grid; gap: 15px;">
+            `;
+            
+            ranking.forEach((player, index) => {
+              let medal = '';
+              let bgColor = '';
+              
+              if (index === 0) {
+                medal = '🥇';
+                bgColor = 'linear-gradient(45deg, #FFD700, #FFA500)';
+              } else if (index === 1) {
+                medal = '🥈';
+                bgColor = 'linear-gradient(45deg, #C0C0C0, #A9A9A9)';
+              } else if (index === 2) {
+                medal = '🥉';
+                bgColor = 'linear-gradient(45deg, #CD7F32, #8B4513)';
+              } else {
+                medal = `${index + 1}°`;
+                bgColor = 'linear-gradient(45deg, #f8f9fa, #e9ecef)';
+              }
+              
+              html += `
+                <div style="
+                  background: ${bgColor}; 
+                  padding: 15px; 
+                  border-radius: 10px; 
+                  display: flex; 
+                  justify-content: space-between; 
+                  align-items: center;
+                  color: ${index < 3 ? 'white' : '#333'};
+                  font-weight: bold;
+                  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+                ">
+                  <div style="font-size: 1.2em;">
+                    ${medal} ${player.name}
+                  </div>
+                  <div style="font-size: 1.3em;">
+                    ${player.totalScore} pts
+                  </div>
+                </div>
+              `;
+            });
+            
+            html += `</div></div>`;
+          }
+          
+          // Mostrar resultados detallados de la ronda
+          html += `<div class="multiplayer-results">`;
           
           Object.entries(results).forEach(([pid, result]) => {
             html += `
               <div class="player-results">
-                <h4>${result.answers.playerName || 'Jugador'} - ${result.totalScore} pts</h4>
+                <h4>${result.answers.playerName || 'Jugador'} - +${result.totalScore} pts esta ronda</h4>
                 <div class="score-breakdown">
             `;
             
@@ -1603,7 +1729,8 @@
         if (isSolo) {
           finishSoloRound();
         } else {
-          await handleTimeUp();
+          // En modo multijugador, manejar STOP
+          await handlePlayerStop();
         }
       }
     };
