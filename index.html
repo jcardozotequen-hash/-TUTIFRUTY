@@ -829,6 +829,17 @@
       });
       
       listeners.set('room', roomListener);
+      
+      // Escuchar cuando alguien dice STOP
+      const stopRef = ref(database, `gameStates/${roomId}/playerStopped`);
+      const stopListener = onValue(stopRef, (snapshot) => {
+        if (snapshot.exists() && gameStarted) {
+          const stopData = snapshot.val();
+          handleSomeoneStoppedGame(stopData);
+        }
+      });
+      
+      listeners.set('stop', stopListener);
     }
 
     function clearListeners() {
@@ -935,6 +946,28 @@
       } catch (error) {
         console.error('Error al enviar respuestas:', error);
         return false;
+      }
+    }
+
+    // Nueva función para manejar STOP de cualquier jugador
+    async function handlePlayerStop() {
+      if (!currentRoom || !playerId) return;
+      
+      try {
+        // Marcar que este jugador dijo STOP
+        await set(ref(database, `gameStates/${currentRoom}/playerStopped`), {
+          playerId: playerId,
+          playerName: currentPlayer,
+          stoppedAt: serverTimestamp()
+        });
+        
+        // Si soy host, terminar la ronda inmediatamente
+        if (isHost) {
+          await finishMultiplayerRound();
+        }
+        
+      } catch (error) {
+        console.error('Error al procesar STOP:', error);
       }
     }
 
@@ -1606,6 +1639,3 @@
   </script>
 </body>
 </html>
-
-
-
